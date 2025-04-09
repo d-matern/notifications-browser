@@ -29,6 +29,9 @@ webpush.setVapidDetails(
 // 📥 Массив подписок
 const subscriptions = [];
 
+// 📥 Массив уведомлений
+const notifications = [];
+
 // Получение подписки от клиента
 app.post('/api/save-subscription', (req, res) => {
   const subscription = req.body;
@@ -45,24 +48,47 @@ app.post('/api/save-subscription', (req, res) => {
 
 // 🚀 Пуш уведомления каждые 3 секунды
 setInterval(() => {
-  if (subscriptions.length === 0) return;
+    if (subscriptions.length === 0) return;
 
-  const titles = ['🔥 Новость!', '🎉 Акция!', '📢 Объявление', '✅ Успех!', '💡 Идея!'];
-  const messages = ['Проверь это!', 'Это может быть интересно.', 'Ты не поверишь...', 'Сработало!', 'Вот это да!'];
+    const titles = ['🔥 Новость!', '🎉 Акция!', '📢 Объявление', '✅ Успех!', '💡 Идея!'];
+    const messages = ['Проверь это!', 'Это может быть интересно.', 'Ты не поверишь...', 'Сработало!', 'Вот это да!'];
 
-  const payload = JSON.stringify({
-    title: titles[Math.floor(Math.random() * titles.length)],
-    body: messages[Math.floor(Math.random() * messages.length)],
-  });
+    const payload = {
+        title: titles[Math.floor(Math.random() * titles.length)],
+        body: messages[Math.floor(Math.random() * messages.length)],
+        data: {
+            id: Math.random().toString(36).substring(2), // генерируем ID
+            url: 'http://localhost:3001/dashboard', // можно сюда добавить переход по клику
+            date: new Date(),
+            img: '/favicon.png',
+            is_read: false
+        }
+    };
 
-  subscriptions.forEach((sub, i) => {
-    webpush.sendNotification(sub, payload).catch(err => {
-      console.error(`❌ Ошибка в подписке [${i}]:`, err.message);
+    subscriptions.forEach((sub, i) => {
+        webpush.sendNotification(sub, JSON.stringify(payload)).catch(err => {
+            console.error(`❌ Ошибка в подписке [${i}]:`, err.message);
+        });
     });
-  });
 
-  console.log('📤 Push отправлен всем подпискам');
-}, 5000);
+  
+    notifications.push(payload);
+    console.log('📤 Push отправлен всем подпискам');
+}, 10000);
+
+// Лог: пользователь кликнул по уведомлению
+app.post('/api/notification-clicked', (req, res) => {
+  const { notificationId, clickedAt } = req.body;
+  console.log(`🟢 Уведомление [${notificationId}] кликнуто в ${new Date(clickedAt).toLocaleTimeString()}`);
+  res.status(200).json({ success: true });
+});
+
+// Лог: пользователь закрыл уведомление
+app.post('/api/notification-closed', (req, res) => {
+  const { notificationId, closedAt } = req.body;
+  console.log(`🔴 Уведомление [${notificationId}] закрыто в ${new Date(closedAt).toLocaleTimeString()}`);
+  res.status(200).json({ success: true });
+});
 
 // ✅ Запуск сервера на порту 3005
 app.listen(port, () => {
