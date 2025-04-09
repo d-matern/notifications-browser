@@ -3,6 +3,7 @@ import cors from 'cors';
 import webpush from 'web-push';
 
 const app = express();
+const port = 3005;
 
 // ✅ Разрешаем CORS
 app.use(cors({
@@ -25,32 +26,45 @@ webpush.setVapidDetails(
   
 );
 
+// 📥 Массив подписок
+const subscriptions = [];
+
 // Получение подписки от клиента
 app.post('/api/save-subscription', (req, res) => {
   const subscription = req.body;
-  // Можно сохранить в базе или в памяти
-  console.log('Подписка клиента:', subscription);
-  res.status(200).json({ message: 'OK' });
+  
+  // Добавляем, если такой еще нет
+  const exists = subscriptions.find(s => JSON.stringify(s) === JSON.stringify(subscription));
+  if (!exists) {
+    subscriptions.push(subscription);
+    console.log('✅ Подписка добавлена. Всего:', subscriptions.length);
+  }
+
+  res.status(201).json({ message: 'Подписка сохранена' });
 });
 
-// Отправка push уведомления
-app.post('/api/send-push', async (req, res) => {
-    const subscription = req.body.subscription;
-    const payload = JSON.stringify({
-        title: 'Новое уведомление',
-        body: 'Контент из сервера',
+// 🚀 Пуш уведомления каждые 3 секунды
+setInterval(() => {
+  if (subscriptions.length === 0) return;
+
+  const titles = ['🔥 Новость!', '🎉 Акция!', '📢 Объявление', '✅ Успех!', '💡 Идея!'];
+  const messages = ['Проверь это!', 'Это может быть интересно.', 'Ты не поверишь...', 'Сработало!', 'Вот это да!'];
+
+  const payload = JSON.stringify({
+    title: titles[Math.floor(Math.random() * titles.length)],
+    body: messages[Math.floor(Math.random() * messages.length)],
+  });
+
+  subscriptions.forEach((sub, i) => {
+    webpush.sendNotification(sub, payload).catch(err => {
+      console.error(`❌ Ошибка в подписке [${i}]:`, err.message);
     });
+  });
 
-    try {
-        await webpush.sendNotification(subscription, payload);
-        res.sendStatus(200);
-    } catch (error) {
-        console.error('Ошибка при отправке push:', err);
-        res.sendStatus(500);
-    }
-});
+  console.log('📤 Push отправлен всем подпискам');
+}, 5000);
 
 // ✅ Запуск сервера на порту 3005
-app.listen(3005, () => {
-    console.log('🚀 Сервер запущен на http://localhost:3005');
+app.listen(port, () => {
+  console.log(`🚀 Сервер запущен на http://localhost:${port}`);
 });
