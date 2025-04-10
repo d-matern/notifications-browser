@@ -8,7 +8,7 @@ const port = 3005;
 // ✅ Разрешаем CORS
 app.use(cors({
   origin: 'http://localhost:3001', // или ['http://localhost:3001'] если несколько
-  methods: ['GET', 'POST'],
+  methods: ['GET', 'POST', 'PATCH'],
   credentials: true
 }));
 
@@ -31,6 +31,33 @@ const subscriptions = [];
 
 // 📥 Массив уведомлений
 const notifications = [];
+
+// Отдаем существующие уведомления
+app.get('/api/notifications', (req, res) => {
+  res.status(200).json({
+    data: notifications.map(n => ({
+      id: n.data.id,
+      title: n.title,
+      content: n.body,
+      date: n.data.date,
+      img: n.data.img,
+      is_read: n.data.is_read,
+    }))
+  });
+});
+
+// Обновляем существующие уведомления
+app.patch('/api/notifications', (req, res) => {
+  const IDs = req.body;
+  
+  notifications.forEach(n => {
+    if (IDs.includes(n.data.id)) {
+      n.data.is_read = true;
+    }
+  });
+
+  res.status(200).json({ success: true });
+});
 
 // Получение подписки от клиента
 app.post('/api/save-subscription', (req, res) => {
@@ -74,12 +101,18 @@ setInterval(() => {
   
     notifications.push(payload);
     console.log('📤 Push отправлен всем подпискам');
-}, 10000);
+}, 20000);
 
 // Лог: пользователь кликнул по уведомлению
 app.post('/api/notification-clicked', (req, res) => {
   const { notificationId, clickedAt } = req.body;
   console.log(`🟢 Уведомление [${notificationId}] кликнуто в ${new Date(clickedAt).toLocaleTimeString()}`);
+  notifications.forEach(n => {
+    if (n.data.id === notificationId) {
+      n.data.is_read = true;
+    }
+  });
+  
   res.status(200).json({ success: true });
 });
 
@@ -87,6 +120,13 @@ app.post('/api/notification-clicked', (req, res) => {
 app.post('/api/notification-closed', (req, res) => {
   const { notificationId, closedAt } = req.body;
   console.log(`🔴 Уведомление [${notificationId}] закрыто в ${new Date(closedAt).toLocaleTimeString()}`);
+
+  notifications.forEach(n => {
+    if (n.data.id === notificationId) {
+      n.data.is_read = true;
+    }
+  });
+  
   res.status(200).json({ success: true });
 });
 
