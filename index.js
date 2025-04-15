@@ -23,11 +23,10 @@ webpush.setVapidDetails(
     'mailto:denismatern@gmail.com',
     publicKey,
     privateKey
-  
 );
 
 // 📥 Массив подписок
-const subscriptions = [];
+const subscriptions = new Map();
 
 // 📥 Массив уведомлений
 const notifications = [];
@@ -47,7 +46,7 @@ app.get('/api/notifications', (req, res) => {
 });
 
 // Обновляем существующие уведомления
-app.patch('/api/notifications', (req, res) => {
+app.patch('/api/notifications/read', (req, res) => {
   const IDs = req.body;
   
   notifications.forEach(n => {
@@ -61,55 +60,68 @@ app.patch('/api/notifications', (req, res) => {
 
 // Получение подписки от клиента
 app.post('/api/save-subscription', (req, res) => {
-  const subscription = req.body;
+  const { userId, subscription } = req.body;
   
+  if (!userId || !subscription) {
+    return res.status(400).json({ message: 'userId и subscription обязательны' });
+  }
   // Добавляем, если такой еще нет
-  const exists = subscriptions.find(s => JSON.stringify(s) === JSON.stringify(subscription));
-  if (!exists) {
-    subscriptions.push(subscription);
-    console.log('✅ Подписка добавлена. Всего:', subscriptions.length);
+  const existing = subscriptions.get(userId);
+  const isSame = existing && JSON.stringify(existing) === JSON.stringify(subscription);
+  if (!isSame) {
+    subscriptions.set(userId, subscription);
+    console.log(`✅ Подписка обновлена для userId: ${userId}`);
+  } else {
+    console.log(`ℹ️ Подписка уже актуальна для userId: ${userId}`);
   }
 
   res.status(201).json({ message: 'Подписка сохранена' });
 });
 
-// 🚀 Пуш уведомления каждые 3 секунды
-setInterval(() => {
-    if (subscriptions.length === 0) return;
-
-    const titles = ['🔥 Новость!', '🎉 Акция!', '📢 Объявление', '✅ Успех!', '💡 Идея!'];
-    const messages = ['Проверь это!', 'Это может быть интересно.', 'Ты не поверишь...', 'Сработало!', 'Вот это да!'];
-
-    const payload = {
-        title: titles[Math.floor(Math.random() * titles.length)],
-        body: messages[Math.floor(Math.random() * messages.length)],
-        data: {
-            id: Math.random().toString(36).substring(2), // генерируем ID
-            url: 'http://localhost:3001/dashboard', // можно сюда добавить переход по клику
-            date: new Date(),
-            img: '/favicon.png',
-            is_read: false
-        }
-    };
-
-    subscriptions.forEach((sub, i) => {
-        webpush.sendNotification(sub, JSON.stringify(payload)).catch(err => {
-            console.error(`❌ Ошибка в подписке [${i}]:`, err.message);
-        });
-    });
-
+app.post('/api/create-notification', (req, res) => {
+  console.log(req.body);
   
-    notifications.push(payload);
-    console.log('📤 Push отправлен всем подпискам');
-}, 20000);
+  const { userId } = req.body;
+  const subscription = subscriptions.get(userId);
+
+  const titles = ['🔥 Новость!', '🎉 Акция!', '📢 Объявление', '✅ Успех!', '💡 Идея!'];
+  const messages = ['Проверь это!', 'Это может быть интересно.', 'Ты не поверишь...', 'Сработало!', 'Вот это да!'];
+  const payload = {
+    notification_id: Math.random().toString(36).substring(2), // генерируем ID
+    notification_user_relation_id: Math.random().toString(36).substring(2), // генерируем ID
+    title: titles[Math.floor(Math.random() * titles.length)],
+    content: messages[Math.floor(Math.random() * messages.length)],
+    image_url: '/favicon.png',
+    is_viewed: false,
+    viewed_at: null,
+    created_at: new Date().toLocaleDateString(),
+    url: 'http://localhost:3001/dashboard', // можно сюда добавить переход по клику
+  };
+
+  if (subscription) {
+    webpush.sendNotification(subscription, JSON.stringify(payload))
+      .then(() => {
+        console.log(`✅ Уведомление отправлено для userId: ${userId}`);
+        notifications.push(payload);
+      })
+      .catch(() => console.error(`❌ Ошибка отправки для ${userId}:`, err));
+  } else {
+    console.warn(`⚠️ Нет подписки для userId: ${userId}`);
+  }
+});
 
 // Лог: пользователь кликнул по уведомлению
 app.post('/api/notification-clicked', (req, res) => {
+  console.log(req.body);
+  
   const { notificationId, clickedAt } = req.body;
-  console.log(`🟢 Уведомление [${notificationId}] кликнуто в ${new Date(clickedAt).toLocaleTimeString()}`);
+  const viewedAt = new Date(clickedAt).toLocaleTimeString();
+
+  console.log(`🟢 Уведомление [${notificationId}] кликнуто в ${viewedAt}`);
   notifications.forEach(n => {
-    if (n.data.id === notificationId) {
-      n.data.is_read = true;
+    if (n.notification_id === notificationId) {
+      n.is_viewed = true;
+      n.viewed_at = viewedAt;
     }
   });
   
@@ -119,11 +131,13 @@ app.post('/api/notification-clicked', (req, res) => {
 // Лог: пользователь закрыл уведомление
 app.post('/api/notification-closed', (req, res) => {
   const { notificationId, closedAt } = req.body;
-  console.log(`🔴 Уведомление [${notificationId}] закрыто в ${new Date(closedAt).toLocaleTimeString()}`);
+  const viewedAt = new Date(closedAt).toLocaleTimeString();
 
+  console.log(`🔴 Уведомление [${notificationId}] закрыто в ${viewedAt}`);
   notifications.forEach(n => {
-    if (n.data.id === notificationId) {
-      n.data.is_read = true;
+    if (n.notification_id === notificationId) {
+      n.is_viewed = true;
+      n.viewed_at = viewedAt;
     }
   });
   
