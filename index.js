@@ -111,13 +111,10 @@ app.post('/api/create-notification', (req, res) => {
 });
 
 // Лог: пользователь кликнул по уведомлению
-app.post('/api/notification-clicked', (req, res) => {
-  console.log(req.body);
-  
-  const { notificationId, clickedAt } = req.body;
-  const viewedAt = new Date(clickedAt).toLocaleTimeString();
-
+app.post('/api/notification-clicked', (req, res) => {  
+  const { notificationId, viewedAt } = req.body;
   console.log(`🟢 Уведомление [${notificationId}] кликнуто в ${viewedAt}`);
+
   notifications.forEach(n => {
     if (n.notification_id === notificationId) {
       n.is_viewed = true;
@@ -130,10 +127,9 @@ app.post('/api/notification-clicked', (req, res) => {
 
 // Лог: пользователь закрыл уведомление
 app.post('/api/notification-closed', (req, res) => {
-  const { notificationId, closedAt } = req.body;
-  const viewedAt = new Date(closedAt).toLocaleTimeString();
-
+  const { notificationId, viewedAt } = req.body;
   console.log(`🔴 Уведомление [${notificationId}] закрыто в ${viewedAt}`);
+
   notifications.forEach(n => {
     if (n.notification_id === notificationId) {
       n.is_viewed = true;
